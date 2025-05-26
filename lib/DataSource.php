@@ -7,7 +7,7 @@ class DataSource
     const USERNAME = 'romero';
     const PASSWORD = 'romerotchiaze';
     const DATABASENAME = 'db_collecte';
-    const PORT = 4306; // <<< AJOUT du port
+    const PORT = 4306;
 
     private $conn;
 
@@ -102,14 +102,24 @@ class DataSource
 
     public function bindQueryParams($stmt, $paramType, $paramArray = array())
     {
-        $paramValueReference[] = &$paramType;
-        for ($i = 0; $i < count($paramArray); $i++) {
-            $paramValueReference[] = &$paramArray[$i];
+        if (!empty($paramType) && !empty($paramArray)) {
+            // Vérifier que le nombre de types correspond au nombre de paramètres
+            if (strlen($paramType) !== count($paramArray)) {
+                trigger_error("Number of param types ($paramType) does not match number of params (" . count($paramArray) . ")", E_USER_ERROR);
+            }
+
+            // Créer un tableau pour les paramètres
+            $paramValueReference = array_merge([$paramType], array_values($paramArray));
+
+            // Créer des références pour bind_param
+            $bindParams = [];
+            foreach ($paramValueReference as $key => &$value) {
+                $bindParams[$key] = &$value;
+            }
+
+            // Appeler bind_param avec les références
+            call_user_func_array([$stmt, 'bind_param'], $bindParams);
         }
-        call_user_func_array(array(
-            $stmt,
-            'bind_param'
-        ), $paramValueReference);
     }
 
     public function getRecordCount($query, $paramType = "", $paramArray = array())

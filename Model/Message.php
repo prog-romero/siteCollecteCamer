@@ -181,26 +181,59 @@ class Message
 
     public function GetNextMessage($id)
     {
-        $query = 'SELECT * FROM message WHERE id NOT IN (
-                      SELECT id_message FROM votes WHERE id_user = ?) 
-                  AND total_votes < 3 ORDER BY RAND() LIMIT 1';
+        // Étape 1 : messages partiellement votés
+        $query = 'SELECT * FROM message 
+                  WHERE total_votes > 0 AND total_votes < 3
+                  AND id NOT IN (
+                      SELECT id_message FROM votes WHERE id_user = ?
+                  )
+                  ORDER BY RAND() LIMIT 1';
         $paramType = 's';
         $paramValue = array($id);
-        return $this->ds->select($query, $paramType, $paramValue);
+        $partialVote = $this->ds->select($query, $paramType, $paramValue);
+
+        if (!empty($partialVote)) {
+            return $partialVote;
+        }
+
+        // Étape 2 : messages sans votes
+        $query = 'SELECT * FROM message 
+                  WHERE total_votes = 0
+                  AND id NOT IN (
+                      SELECT id_message FROM votes WHERE id_user = ?
+                  )
+                  ORDER BY RAND() LIMIT 1';
+        $paramValue = array($id);
+        $noVote = $this->ds->select($query, $paramType, $paramValue);
+
+        return !empty($noVote) ? $noVote : null;
     }
 
     public function GetAllMessages($id)
     {
+        // Messages partiellement votés
         $query = 'SELECT DISTINCT message.id, username, text, valide 
                   FROM message, utilisateur 
                   WHERE message.id_user = utilisateur.id 
+                  AND total_votes > 0 AND total_votes < 3
                   AND message.id NOT IN (
                       SELECT votes.id_message FROM votes WHERE votes.id_user = ?
-                  )
-                  AND total_votes < 3';
+                  )';
         $paramType = 's';
         $paramValue = array($id);
         $resultArray = $this->ds->select($query, $paramType, $paramValue);
+
+        // Si aucun message partiellement voté, afficher messages non votés
+        if (empty($resultArray)) {
+            $query = 'SELECT DISTINCT message.id, username, text, valide 
+                      FROM message, utilisateur 
+                      WHERE message.id_user = utilisateur.id 
+                      AND total_votes = 0
+                      AND message.id NOT IN (
+                          SELECT votes.id_message FROM votes WHERE votes.id_user = ?
+                      )';
+            $resultArray = $this->ds->select($query, $paramType, $paramValue);
+        }
 
         $result = '<table id="example" class="display" style="width:100%">
          <thead>
@@ -257,5 +290,66 @@ class Message
 
         $result .= '</table>';
         return $result;
+    }
+
+    public function getTotalMessages()
+    {
+        $query = "SELECT COUNT(*) as total FROM message";
+        $result = $this->ds->select($query);
+        return $result[0]['total'] ?? 0;
+    }
+
+    public function getMessagesWithVoteFinalThree()
+    {
+        $query = "SELECT COUNT(*) as total FROM message WHERE total_votes = ?";
+        $paramType = "i";
+        $paramArray = [3];
+        $result = $this->ds->select($query, $paramType, $paramArray);
+        return $result[0]['total'] ?? 0;
+    }
+
+    public function getMessagesVotedAtLeastOnce()
+    {
+        $query = "SELECT COUNT(*) as total FROM message WHERE total_votes > 0";
+        $result = $this->ds->select($query);
+        return $result[0]['total'] ?? 0;
+    }
+
+
+    public function getVotersWithVoteCount()
+    {
+        $query = "SELECT u.username, COUNT(v.id) as vote_count 
+                  FROM utilisateur u 
+                  LEFT JOIN votes v ON u.id = v.id_user 
+                  WHERE u.type = ? 
+                  GROUP BY u.id, u.username";
+        $paramType = "s";
+        $paramArray = ["Votant"];
+        $result = $this->ds->select($query, $paramType, $paramArray);
+        return $result;
+    }
+
+    public function getTopFiveVoters()
+    {
+        $query = "SELECT u.username, COUNT(v.id) as vote_count 
+                  FROM utilisateur u 
+                  LEFT JOIN votes v ON u.id = v.id_user 
+                  WHERE u.type = ? 
+                  GROUP BY u.id, u.username 
+                  ORDER BY vote_count DESC 
+                  LIMIT 5";
+        $paramType = "s";
+        $paramArray = ["Votant"];
+        $result = $this->ds->select($query, $paramType, $paramArray);
+        return $result;
+    }
+
+    public function getUserVoteCount($userId)
+    {
+        $query = "SELECT COUNT(*) as vote_count FROM votes WHERE id_user = ?";
+        $paramType = "i";
+        $paramArray = [$userId];
+        $result = $this->ds->select($query, $paramType, $paramArray);
+        return $result[0]['vote_count'] ?? 0;
     }
 }
