@@ -1,178 +1,254 @@
 <?php
 use Phppot\Message;
 session_start();
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
-if (isset($_SESSION["username"])) 
+
+// Sécurité et initialisation des données
+if (isset($_SESSION["username"]) && isset($_SESSION["admin"]) && $_SESSION["admin"] == 1) 
 {
     $user = $_SESSION["username"];
     require_once './Model/Message.php';
     $message = new Message();
-    $result = $message->GetAllMessages_Adm();
-    // Récupérer les statistiques
+    
+    // Récupération de TOUTES les données nécessaires pour la page
+    $allMessagesTable = $message->GetAllMessages_Adm();
     $totalMessages = $message->getTotalMessages();
     $messagesWithVoteFinalThree = $message->getMessagesWithVoteFinalThree();
     $messagesVotedAtLeastOnce = $message->getMessagesVotedAtLeastOnce();
-    // Récupérer les 5 votants les plus actifs
     $topFiveVoters = $message->getTopFiveVoters();
+    
     session_write_close();
 } 
 else 
 {
-    session_unset();
-    session_write_close();
-    $url = "./index.php";
-    header("Location: $url");
+    // Redirection si l'utilisateur n'est pas un admin connecté
+    header("Location: ./index.php");
+    exit();
 }
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                   
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js" integrity="sha384-cs/chFZiN24E4KMATLdqdvsezGxaGsi4hLGOzlXwp5UZB1LY//20VyM2taTB4QvJ" crossorigin="anonymous"></script>
-
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
-    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-    
+    <title>Panneau d'administration</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" >
-    
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css"> 
-
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css" integrity="-8bHTC73gkZ7rZ7vpqUQThUDhqcNFyYi2xgDgPDHc+GXVGHXq+xPjynxIopALmOPqzo9JZj0k6OqqewdGO3EsrQ==" crossorigin="anonymous" />
-    
-    <title>Admin</title>
-    
     <link href="assets/css/phppot-style.css" type="text/css" rel="stylesheet" />
-    <link href="assets/css/user-registration.css" type="text/css" rel="stylesheet" />
+    <style>
+        .phppot-container { max-width: 1200px; margin: 30px auto; }
+        .vote-haineux { color: #dc3545; font-weight: bold; }
+        .vote-non_haineux { color: #28a745; font-weight: bold; }
+        .vote-hesite { color: #ffc107; font-weight: bold; }
+    </style>
 </head>
-
 <body>
-    <div class="phppot-container" style="margin-top: 30px;">
-        <div class="page-header">
-            <span class="login-signup"><a href="logout.php" style="font-size: 16px;">Logout</a></span>
+    <div class="phppot-container">
+        <div class="page-header d-flex justify-content-between align-items-center">
+            <h3>Panneau d'administration - Bienvenue <?php echo htmlspecialchars($user); ?></h3>
+            <span class="login-signup"><a href="logout.php" class="btn btn-outline-secondary">Déconnexion</a></span>
         </div>
-        <span class="return"><a href="ajout.php"><i class="fa fa-2x fa-arrow-left"></i></a></span>
-        <div class="page-content">  
-            <h3>Bienvenue <?php echo $user; ?></h3> 
-            <a href="ExportMessageData.php" class="btn btn-success"><i class="dwn"></i> Export Message To CSV</a>
-            <a href="ExportVotesData.php" class="btn btn-success"><i class="dwn"></i> Export Votes To CSV</a>
-            <button id="showVoters" class="btn btn-primary" style="margin-left: 10px;"><i class="fa fa-users"></i> Afficher les votants</button>
-        </div>
-        <!-- Affichage des statistiques -->
-        <div class="statistics" style="margin-top: 20px;">
-            <h4>Statistiques des messages</h4>
-            <p><strong>Nombre total de messages :</strong> <?php echo $totalMessages; ?></p>
-            <p><strong>Messages avec vote final de 3 :</strong> <?php echo $messagesWithVoteFinalThree; ?></p>
-            <p><strong>Messages votés au moins une fois :</strong> <?php echo $messagesVotedAtLeastOnce; ?></p>
-            <!-- Affichage des 5 votants les plus actifs -->
-            <h4>Top 5 des votants les plus actifs</h4>
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>Nom d'utilisateur</th>
-                        <th>Nombre de votes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($topFiveVoters)) : ?>
-                        <?php foreach ($topFiveVoters as $voter) : ?>
-                            <tr>
-                                <td><?php echo htmlspecialchars($voter['username']); ?></td>
-                                <td><?php echo $voter['vote_count']; ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else : ?>
-                        <tr>
-                            <td colspan="2">Aucun votant trouvé.</td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-        <!-- Conteneur pour la liste des votants -->
-        <div id="votersList" style="margin-top: 20px; display: none;">
-            <h4>Liste des votants</h4>
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>Nom d'utilisateur</th>
-                        <th>Nombre de votes</th>
-                    </tr>
-                </thead>
-                <tbody id="votersTableBody">
-                </tbody>
-            </table>
-        </div>
-    </div>  
 
-    <div class="container">
-        <?php echo $result ?>
+        <div class="page-content mb-4">
+            <a href="ExportMessageData.php" class="btn btn-success"><i class="fa fa-download"></i> Exporter Messages</a>
+            <a href="ExportVotesData.php" class="btn btn-success"><i class="fa fa-download"></i> Exporter Votes</a>
+            <button id="showVoters" class="btn btn-warning ml-2"><i class="fa fa-users"></i> Afficher/Cacher les votants</button>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- SECTION STATISTIQUES ET TOP 5 (RESTAURÉE ET AMÉLIORÉE) -->
+        <!-- ========================================================== -->
+        <div class="statistics mb-4">
+            <div class="row">
+                <div class="col-md-6">
+                    <h4>Statistiques des messages</h4>
+                    <ul class="list-group">
+                      <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Messages totaux
+                        <span class="badge badge-primary badge-pill"><?php echo $totalMessages; ?></span>
+                      </li>
+                      <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Messages votés au moins une fois
+                        <span class="badge badge-primary badge-pill"><?php echo $messagesVotedAtLeastOnce; ?></span>
+                      </li>
+                      <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Messages avec 3 votes ou plus
+                        <span class="badge badge-primary badge-pill"><?php echo $messagesWithVoteFinalThree; ?></span>
+                      </li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h4>Top 5 des votants</h4>
+                    <table class="table table-bordered table-hover">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Utilisateur</th>
+                                <th>Nb. Votes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($topFiveVoters)): ?>
+                                <?php foreach ($topFiveVoters as $voter): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($voter['username']); ?></td>
+                                        <td><?php echo $voter['vote_count']; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="2" class="text-center">Aucun vote enregistré pour le moment.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- ========================================================== -->
+        <!-- FIN DE LA SECTION RESTAURÉE -->
+        <!-- ========================================================== -->
+
+        <div id="votersList" style="display: none;" class="mb-4">
+            <h4>Liste complète des votants</h4>
+            <table class="table table-bordered table-hover">
+                <thead class="thead-light"><tr><th>Utilisateur</th><th>Nb. Votes</th><th>Actions</th></tr></thead>
+                <tbody id="votersTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div class="container-fluid p-0">
+            <h4>Tous les messages de la base de données</h4>
+            <?php 
+                // Assurez-vous que la méthode GetAllMessages_Adm existe dans Message.php
+                if(method_exists($message, 'GetAllMessages_Adm')) {
+                    echo $allMessagesTable;
+                } else {
+                    echo "<p class='alert alert-danger'>Erreur: La méthode GetAllMessages_Adm() est introuvable.</p>";
+                }
+            ?>
+        </div>
+    </div>
+
+    <!-- MODAL POUR LES DÉTAILS -->
+    <div class="modal fade" id="userDetailsModal" tabindex="-1" role="dialog">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header"><h5 class="modal-title" id="userDetailsModalLabel"></h5><button type="button" class="close" data-dismiss="modal">×</button></div>
+          <div class="modal-body">
+            <div id="userStats"></div><hr>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-striped">
+                    <thead><tr><th>Message</th><th>Vote</th><th>Explication</th></tr></thead>
+                    <tbody id="userVotesTableBody"></tbody>
+                </table>
+            </div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Fermer</button></div>
+        </div>
+      </div>
     </div>
     
+    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
     <script>
     $(document).ready(function () {
-        $('#example').DataTable({
-            pagingType: 'full_numbers',
-        });
+        $('#example').DataTable({ "language": { "url": "//cdn.datatables.net/plug-ins/9dcbecd42ad/i18n/French.json" } });
 
-        $("input.mycheckbox").change(function () {
-            var id = $(this).attr("value");
-            var check = this.checked ? "checked" : "unchecked";
-
-            $.ajax({
-                url: "valid.php",
-                dataType: "json",
-                data: {'checked': check, "id": id},
-                type: "POST",
-                success: function(result) {
-                    // alert(result.abc);
-                },
-                error: function(xhr, status, error) {
-                    alert(xhr.responseText);
-                }
-            });
-        });
-
-        // Gestion du clic sur le bouton "Afficher les votants"
         $("#showVoters").click(function() {
+            var votersList = $("#votersList");
+            if (votersList.is(':visible')) {
+                votersList.slideUp();
+            } else {
+                $.ajax({
+                    url: "get_voters.php",
+                    dataType: "json", type: "GET",
+                    success: function(voters) {
+                        var votersTableBody = $("#votersTableBody").empty();
+                        if (voters && voters.length > 0) {
+                            $.each(voters, function(index, voter) {
+                                var row = `<tr data-user-row-id="${voter.id}">
+                                    <td>${voter.username}</td>
+                                    <td>${voter.vote_count}</td>
+                                    <td>
+                                        <button class="btn btn-info btn-sm view-details" title="Voir les détails" data-userid="${voter.id}" data-username="${voter.username}"><i class="fa fa-eye"></i></button>
+                                        <button class="btn btn-danger btn-sm delete-user" title="Supprimer l'utilisateur" data-userid="${voter.id}" data-username="${voter.username}"><i class="fa fa-trash"></i></button>
+                                    </td></tr>`;
+                                votersTableBody.append(row);
+                            });
+                        } else {
+                            votersTableBody.append("<tr><td colspan='3' class='text-center'>Aucun votant trouvé.</td></tr>");
+                        }
+                        votersList.slideDown();
+                    },
+                    error: function(xhr) { alert("Erreur chargement votants: " + xhr.responseText); }
+                });
+            }
+        });
+
+        // GESTION DU CLIC SUR "DÉTAILS"
+        $(document).on('click', '.view-details', function() {
+            var userId = $(this).data('userid');
+            var username = $(this).data('username');
             $.ajax({
-                url: "get_voters.php",
-                dataType: "json",
-                type: "GET",
-                success: function(result) {
-                    var votersTableBody = $("#votersTableBody");
-                    votersTableBody.empty(); // Vider le tableau avant de le remplir
-                    if (result.length > 0) {
-                        $.each(result, function(index, voter) {
-                            votersTableBody.append(
-                                "<tr>" +
-                                "<td>" + voter.username + "</td>" +
-                                "<td>" + voter.vote_count + "</td>" +
-                                "</tr>"
-                            );
-                        });
-                        $("#votersList").show();
-                    } else {
-                        votersTableBody.append(
-                            "<tr><td colspan='2'>Aucun votant trouvé.</td></tr>"
+                url: 'get_user_details.php',
+                type: 'GET',
+                dataType: 'json',
+                data: { user_id: userId },
+                success: function(response) {
+                    if (response.status === 'success') {
+                        $('#userDetailsModalLabel').text('Détails des votes pour ' + username);
+                        var stats = response.data.stats;
+                        $('#userStats').html(
+                            `<h4>Statistiques</h4><p><strong>Haineux:</strong> <span class="vote-haineux">${stats.haineux_count}</span> | ` +
+                            `<strong>Non Haineux:</strong> <span class="vote-non_haineux">${stats.non_haineux_count}</span> | `+
+                            `<strong>Hésitations:</strong> <span class="vote-hesite">${stats.hesite_count}</span></p>`
                         );
-                        $("#votersList").show();
+                        var votesTableBody = $('#userVotesTableBody').empty();
+                        if (response.data.votes && response.data.votes.length > 0) {
+                            $.each(response.data.votes, function(i, vote) {
+                                var voteClass = 'vote-' + (vote.vote || '').toLowerCase();
+                                var escapedText = $('<div/>').text(vote.text || '').html();
+                                var escapedExplication = $('<div/>').text(vote.explication || '').html();
+                                votesTableBody.append(`<tr><td>${escapedText}</td><td class="${voteClass}">${vote.vote}</td><td>${escapedExplication}</td></tr>`);
+                            });
+                        } else {
+                            votesTableBody.append('<tr><td colspan="3" class="text-center">Cet utilisateur n\'a encore fait aucun vote.</td></tr>');
+                        }
+                        $('#userDetailsModal').modal('show');
+                    } else {
+                        alert('Erreur: ' + response.message);
                     }
                 },
-                error: function(xhr, status, error) {
-                    alert("Erreur lors de la récupération des votants : " + xhr.responseText);
+                error: function(xhr) {
+                    var errorMessage = "Erreur AJAX: " + (xhr.responseJSON ? xhr.responseJSON.message : xhr.responseText);
+                    alert(errorMessage);
                 }
             });
+        });
+
+        // GESTION DU CLIC SUR "SUPPRIMER"
+        $(document).on('click', '.delete-user', function() {
+            var userId = $(this).data('userid');
+            var username = $(this).data('username');
+            if (confirm(`Êtes-vous sûr de vouloir supprimer ${username} ?\nCette action est irréversible et annulera tous ses votes.`)) {
+                $.ajax({
+                    url: 'delete_user.php', type: 'POST', dataType: 'json', data: { user_id: userId },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            location.reload();
+                        } else {
+                            alert('Erreur lors de la suppression: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        var errorMessage = "Erreur AJAX: " + (xhr.responseJSON ? xhr.responseJSON.message : xhr.responseText);
+                        alert(errorMessage);
+                    }
+                });
+            }
         });
     });
     </script>
